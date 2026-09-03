@@ -1,7 +1,7 @@
-faiss-cpu
-sentence-transformers
-langchain-text-splitters
-langchain-huggingface
+pandas
+langchain
 langchain-community
-transformers
-streamlit
+langchain-huggingface
+chromadb
+sentence-transformers
+pydantic
