@@ -1,6 +1,8 @@
 import pandas as pd
 import os
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_community.vectorstores import Chroma
+from langchain_huggingface import HuggingFaceEmbeddings
 
 def load_and_clean_data(file_path):
     print("Loading dataset...")
@@ -16,31 +18,35 @@ def load_and_clean_data(file_path):
 
 def chunk_data(texts, metadatas):
     print("Chunking text data...")
-    # Initialize the LangChain text splitter
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=500,
         chunk_overlap=50
     )
-    
-    # Create LangChain Document objects containing the chunked text and metadata
     docs = text_splitter.create_documents(texts, metadatas=metadatas)
-    
     print(f"Split data into {len(docs)} chunks!")
     return docs
+
+def create_vector_db(docs, persist_dir):
+    print("Initializing embedding model...")
+    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    
+    print("Building and persisting Chroma vector database (this may take a minute)...")
+    vector_store = Chroma.from_documents(
+        documents=docs, 
+        embedding=embeddings, 
+        persist_directory=persist_dir
+    )
+    print(f"Successfully saved vector database to {persist_dir}!")
+    return vector_store
 
 if __name__ == "__main__":
     current_dir = os.path.dirname(os.path.abspath(__file__))
     file_path = os.path.join(current_dir, "..", "data", "movie_synopsis.csv")
-    
-    # 1. Load data
+
+    db_path = os.path.join(current_dir, "..", "chroma_db")
+
     movie_texts, movie_metadata = load_and_clean_data(file_path)
-    
-    # 2. Chunk data
+
     document_chunks = chunk_data(movie_texts, movie_metadata)
-    
-    # Print the first chunk to inspect
-    print("\n--- Sample Chunk 1 ---")
-    print(document_chunks[0].page_content)
-    print("--- Metadata ---")
-    print(document_chunks[0].metadata)
-    print("----------------------")
+ 
+    create_vector_db(document_chunks, db_path)
