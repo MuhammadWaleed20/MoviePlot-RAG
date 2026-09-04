@@ -1,7 +1,7 @@
 import pandas as pd
 import os
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
+from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 
 def load_and_clean_data(file_path):
@@ -41,12 +41,47 @@ def create_vector_db(docs, persist_dir):
 
 if __name__ == "__main__":
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    file_path = os.path.join(current_dir, "..", "data", "movie_synopsis.csv")
-
     db_path = os.path.join(current_dir, "..", "chroma_db")
-
-    movie_texts, movie_metadata = load_and_clean_data(file_path)
-
-    document_chunks = chunk_data(movie_texts, movie_metadata)
- 
-    create_vector_db(document_chunks, db_path)
+    
+    print("Initializing system (loading embeddings and database)...")
+    # 1. Initialize Retriever & LLM ONLY ONCE
+    retriever = get_retriever(db_path)
+    
+    # Note: Use whatever model string worked for you in the previous step
+    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
+    
+    # 2. Design the Prompt Template
+    template = """You are a movie expert assistant. Use the following retrieved movie plots to answer the question. 
+    If you don't know the answer based on the context, just say that you don't know. Do not make up information.
+    
+    Context: {context}
+    
+    Question: {question}
+    
+    Answer:"""
+    prompt = PromptTemplate.from_template(template)
+    
+    # 3. Build the RAG Chain
+    rag_chain = (
+        {"context": retriever | format_docs, "question": RunnablePassthrough()}
+        | prompt
+        | llm
+        | StrOutputParser()
+    )
+    
+    print("\n✅ System Ready! Type 'exit' to quit.\n")
+    
+    # 4. Interactive Chat Loop
+    while True:
+        user_question = input("🗣️ Question: ")
+        if user_question.lower() in ['exit', 'quit']:
+            print("Shutting down...")
+            break
+            
+        print("🤖 Answer: ", end="", flush=True)
+        
+        # Use .stream() instead of .invoke() for instant word-by-word output
+        for chunk in rag_chain.stream(user_question):
+            print(chunk, end="", flush=True)
+            
+        print("\n" + "-"*50 + "\n")
